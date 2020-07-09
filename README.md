@@ -1,5 +1,5 @@
 # yolo-tracking
 
 
-Sources/aknowledgements
-yolov3 TensorFlow implementation: https://github.com/zzh8829/yolov3-tf2
+**Sources/aknowledgements**
+1) yolov3 TensorFlow implementation: https://github.com/zzh8829/yolov3-tf2
