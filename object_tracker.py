@@ -112,7 +112,7 @@ def track_cars(video):
       cv2.putText(
         frame,
         str(int(speed)), 
-        speed_pos, 
+        speed_pos,
         font, 
         0.4,
         (0, 255, 0),
