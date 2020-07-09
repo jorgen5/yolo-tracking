@@ -1,9 +1,11 @@
 # yolo-tracking
 
 **Code sources**
+
 yolov3 TensorFlow implementation: https://github.com/zzh8829/yolov3-tf2
 
 **Theory/tutorials**
+
 Kalman theory and implementation tutorials:
   * https://www.bzarg.com/p/how-a-kalman-filter-works-in-pictures/#mjx-eqn-kalpredictfull
   * https://www.youtube.com/watch?v=m5Bw1m8jJuY&t=841s
