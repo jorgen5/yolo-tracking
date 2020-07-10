@@ -57,6 +57,7 @@ class KalmanFilter:
     return None
 
   def update(self, x_meas, y_meas):
+    self.age = 0
     z = np.array([
       [x_meas],
       [y_meas]
@@ -86,4 +87,4 @@ class KalmanFilter:
     self.P = P_est
 
   def __str__(self):
-    return str(self.x)
+    return str(self.pos)
