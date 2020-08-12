@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
 import math
+import os
 from KalmanFilter import KalmanFilter
 from DetectorTF import DetectorTF
 
@@ -16,15 +17,22 @@ def euclidean_distance(c1, c2):
 
 
 index = 1
+avg_car_w = None
 def update_tracks(detections, kalmans):
   if kalmans == None:
     kalmans = []
+    car_ws = []
     for det in detections:
       global index
-      kalman = KalmanFilter(index, det.centroid[0], det.centroid[1], 0., 0.)
+      bbox_w = abs(det.start_point[0] - det.end_point[0])
+      bbox_h = abs(det.start_point[1] - det.end_point[1])
+      car_ws.append(max(bbox_w, bbox_h))
+      kalman = KalmanFilter(index, det.centroid[0], det.centroid[1], 0., 0., bbox_w, bbox_h)
       kalman.matched_det = det
       index += 1
       kalmans.append(kalman)
+    global avg_car_w
+    avg_car_w = sum(car_ws) / len(detections)
   else:
     available_detections = detections.copy()
 
@@ -39,7 +47,7 @@ def update_tracks(detections, kalmans):
         dists.append((det, dist))
       dists.sort(key=lambda x: x[1])
 
-      if len(dists) == 0 or dists[0][1] > 25:
+      if len(dists) == 0 or dists[0][1] > avg_car_w:
         x, y = kalman.pos
         kalman.age_self()
         
@@ -52,7 +60,7 @@ def update_tracks(detections, kalmans):
         bbox_w = abs(closest_det.start_point[0] - closest_det.end_point[0])
         bbox_h = abs(closest_det.start_point[1] - closest_det.end_point[1])
 
-        kalman.update(centroid[0], centroid[1])
+        kalman.update(centroid[0], centroid[1], bbox_w, bbox_h)
         kalman.matched_det = closest_det
         available_detections.remove(closest_det)
 
@@ -64,35 +72,13 @@ def update_tracks(detections, kalmans):
 
     # left-over (probably new) detections
     for det in available_detections:
-      """
-      if has_kalman(det, kalmans): #?????
-        close_ones.append(det)
-        print("close", det)
-        for d in sorted(detections, key=lambda x: (x.centroid[0], x.centroid[1])):
-          print(d, id(d))
-        for k in kalmans:
-          dist = euclidean_distance(k.pos, det.centroid)
-          if dist < 20:
-            print("=================VALE=================")
-            print(k.matched_det, id(k.matched_det), k.age)
-            for dk in k.dets:
-              print(dk)
-        continue
-      """
-      kalman = KalmanFilter(index, det.centroid[0], det.centroid[1], 0., 0.)
+      bbox_w = abs(det.start_point[0] - det.end_point[0])
+      bbox_h = abs(det.start_point[1] - det.end_point[1])
+      kalman = KalmanFilter(index, det.centroid[0], det.centroid[1], 0., 0., bbox_w, bbox_h)
       kalman.matched_det = det
       index += 1
       kalmans.append(kalman)
   return kalmans
-
-"""
-def has_kalman(det, kalmans):
-  for kalman in kalmans:
-    dist = euclidean_distance(kalman.pos, det.centroid)
-    if dist < 20:
-      return True
-  return False
-"""
 
 def track_cars(video):
   capture = cv2.VideoCapture(video)
@@ -103,7 +89,7 @@ def track_cars(video):
   kalmans = None
   while(True):
     _, frame = capture.read()
-
+    
     detections = detectorTF.get_detections(frame)
 
     kalmans = update_tracks(detections, kalmans)
@@ -113,35 +99,40 @@ def track_cars(video):
       det = kalman.matched_det
       kalman_centroid = (int(kalman.pos[0]), int(kalman.pos[1]))
 
-      rect_w = abs(det.start_point[0] - det.end_point[0])
-      rect_h = abs(det.start_point[1] - det.end_point[1])
+      rect_w = kalman.bbox[0]
+      rect_h = kalman.bbox[1]
 
       # shifting the bbox to the kalman centroid
       k_start_point = (int(kalman_centroid[0] - rect_w / 2), int(kalman_centroid[1] - rect_h / 2))
       k_end_point = (int(kalman_centroid[0] + rect_w / 2), int(kalman_centroid[1] + rect_h / 2))
-      cv2.rectangle(frame, k_start_point, k_end_point, (252, 78, 78), 2)
 
-      #cv2.circle(frame, det.centroid, 4, (0, 0, 255), -1)
-      #cv2.circle(frame, kalman_centroid, 4, (0, 255, 0), -1)
+      cv2.rectangle(frame, k_start_point, k_end_point, (252, 78, 78), 2)
       
-      speed = int(math.sqrt(kalman.x[2][0]**2 + kalman.x[3][0]**2) * 7.76)
+      global avg_car_w
+      kms_in_pixel = 4.5 / avg_car_w / 1000
+      hs_in_frame = 60 * 60 * capture.get(cv2.CAP_PROP_FPS)
+
+      speed = int(math.sqrt(kalman.x[2][0]**2 + kalman.x[3][0]**2) * kms_in_pixel * hs_in_frame)
       if speed > 0:
-        cv2.rectangle(frame, (k_start_point[0], k_start_point[1]), (k_start_point[0] + 30, k_start_point[1] - 20), (252, 78, 78), -1)
+        cv2.rectangle(frame, (k_start_point[0], k_start_point[1]), (k_start_point[0] + 70, k_start_point[1] - 25), (252, 78, 78), -1)
         id_pos = (k_start_point[0] + 3, k_start_point[1] - 5)
         cv2.putText(
           frame,
-          str(speed), 
+          str(speed) + " km/h",
+          #"id: " + str(id_),
           id_pos, 
           font, 
-          0.6,
+          0.5,
           (229, 208, 188),
           2)
 
     if cv2.waitKey(33) == ord('q'):
       break
     
-    cv2.imshow('frame', frame)
     out.write(frame)
+    ratio = height / width
+    imDisplay = cv2.resize(frame, (1500, int(1500 * ratio)))
+    cv2.imshow('frame', imDisplay)
     cv2.waitKey(40)
 
   capture.release()
